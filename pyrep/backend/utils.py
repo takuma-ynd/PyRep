@@ -108,7 +108,7 @@ def suppress_std_out_and_err():
 
         def _redirect_stdout(to_fd):
             sys.stdout.close()
-            os.dup2(to_fd, original_stdout_fd)
+            dup2(to_fd, original_stdout_fd)
             if pyrep.testing:
                 sys.stdout = io.TextIOWrapper(
                     os.fdopen(original_stdout_fd, 'wb'))
@@ -117,7 +117,7 @@ def suppress_std_out_and_err():
 
         def _redirect_stderr(to_fd):
             sys.stderr.close()
-            os.dup2(to_fd, original_stderr_fd)
+            dup2(to_fd, original_stderr_fd)
             if pyrep.testing:
                 sys.stderr = io.TextIOWrapper(
                     os.fdopen(original_stderr_fd, 'wb'))
@@ -136,3 +136,22 @@ def suppress_std_out_and_err():
         finally:
             os.close(saved_stdout_fd)
             # os.close(saved_stderr_fd)
+
+# Adopted from https://github.com/minrk/wurlitzer/blob/6e2e906a8f2ffbd5b27d92a147cd59b0d5008041/wurlitzer.py
+import errno
+import time
+def dup2(a, b, timeout=3):
+    """Like os.dup2, but retry on EBUSY"""
+    dup_err = None
+    # give FDs 3 seconds to not be busy anymore
+    for i in range(int(10 * timeout)):
+        try:
+            return os.dup2(a, b)
+        except OSError as e:
+            dup_err = e
+            if e.errno == errno.EBUSY:
+                time.sleep(0.1)
+            else:
+                raise
+    if dup_err:
+        raise dup_err
